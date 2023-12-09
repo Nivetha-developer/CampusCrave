@@ -11,13 +11,31 @@ import random
 from django.contrib.auth.hashers import make_password,check_password
 from CampusCrave.generics.permissions import *
 from django.template.loader import render_to_string
-# import os
 from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from CampusCrave.settings import *
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.utils.encoding import ( smart_str, force_str, smart_bytes,
+from django.utils.encoding import ( smart_str, force_str,force_bytes, smart_bytes,
                                   DjangoUnicodeDecodeError )
 from django.contrib.auth.tokens import default_token_generator
+
+@csrf_exempt
+def loginapi(request):
+    requestData = j.loads(request.body.decode('utf-8'))
+    role = requestData['role']
+    email = requestData['email']
+    password = requestData['password']
+    user = authenticate(email=email, password=password)
+    
+    if user is not None:
+        if not User_Profile.objects.filter(email=email,is_verified=True):
+            return APIResponse("Please verify otp",400,False)
+        login(request, user)
+        refresh = RefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        data = {"access_token": access_token, "refresh_token": str(refresh)}
+        return APIResponse(data, 200,True)
+    else:
+        return APIResponse('Invalid credentials', 200,True)
 
 class Register(APIView):
 
@@ -30,8 +48,6 @@ class Register(APIView):
         if not first_name:
             return APIResponse('first name is Required', 400, False)
         last_name = datas['last_name']
-        if not last_name:
-            return APIResponse('last name is Required', 400, False)
         email = datas['email']
         if not email:
             return APIResponse('email is Required', 400, False)
@@ -48,17 +64,17 @@ class Register(APIView):
         digits = '0123456789'
         length = 4
         otp = ''.join(random.choice(digits) for _ in range(length))
-        user_obj = User_Profile(firstname=first_name,lastname=last_name,role=role,email=email,password=make_password(password),phone_number=phone_number,otp=otp)
+        user_obj = User_Profile(firstname=first_name,lastname=last_name,role=role,email=email,password=make_password(password),phone_number=phone_number,otp=1234)
         user_obj.save()
         # Generate the activation URL
         # user = User_Profile.objects.get(email=email)
-        # activation_url = f"http://{get_current_site(request).domain}/activate/{urlsafe_base64_encode(force_bytes(user.id))}/{default_token_generator.make_token(user)}/"
+        # activation_url = f"http://{BASE_URL}/activate/{urlsafe_base64_encode(force_bytes(user.id))}/{default_token_generator.make_token(user)}/"
 
-        # Create the text and HTML versions of the email content
-        # text_content = f"Hello {user.first_name}, Click the following link to activate your account: {activation_url}"
-        # html_content = render_to_string("activation_email.html", {'name': user.first_name, 'activation_url': activation_url})
+        # # Create the text and HTML versions of the email content
+        # text_content = f"Hello {user.firstname}, Click the following link to activate your account: {activation_url}"
+        # html_content = render_to_string("activation_email.html", {'name': user.firstname, 'activation_url': activation_url})
 
-        # Create the email message
+        # # Create the email message
         # subject = 'Activate Your Account'
         # from_email = "mailfrombackend@gmail.com"
         # recipient_list = [email]
@@ -70,25 +86,16 @@ class Register(APIView):
         # msg.send()
         return APIResponse("Registration successful, We have sent an email for verification",200, True)
 
-@csrf_exempt
-def loginapi(request):
-    requestData = j.loads(request.body.decode('utf-8'))
-    # role = requestData['role']
-    email = requestData['email']
-    password = requestData['password']
-    user = authenticate(email=email, password=password)
-    
-    if user is not None:
-        if not User_Profile.objects.filter(email=email,is_verified=True):
-            return APIResponse("Please verify otp",400,False)
-        login(request, user)
-        refresh = RefreshToken.for_user(user)
-        access_token = str(refresh.access_token)
-        data = {"access_token": access_token, "refresh_token": str(refresh)}
-        return APIResponse(data, 200,True)
-    else:
-        return APIResponse('Invalid credentials', 200,True)
-
+class Resend_otp(APIView):
+    def post(self,request):
+        email = request.data['email']
+        if not User_Profile.objects.filter(email=email):
+            return APIResponse("Please provide valid email id",400,False)
+        digits = '0123456789'
+        length = 4
+        otp = ''.join(random.choice(digits) for _ in range(length))
+        User_Profile.objects.filter(email=email).update(otp=otp)
+        return APIResponse("OTP send to your registered mobile number",200,True)
 class Update_password(APIView):
     @csrf_exempt
     def post(self,request):
@@ -114,7 +121,7 @@ class Update_password(APIView):
                 return APIResponse('User not exist',400, False)
         else:
             return APIResponse('Please enter valid credentials',400, False)
-        return APIResponse('Your password was changed successfully',200,True)           
+        return APIResponse('Your password changed successfully',200,True)           
   
 @csrf_exempt 
 def resetpassword(request):
@@ -202,20 +209,40 @@ def save_reset_password(request):
 class Dashboard_api(APIView):
     permission_classes=[IsUser]
     def get(self,request):
-        data = {"total_user":User_Profile.objects.filter(role=2).count(),
-                "total_jobs":Jobs.objects.all().count(),
-                "test_taken_student":UserAnswer.objects.all().distinct('user_id').count(),
-                "passed_student":UserAnswer.objects.filter(is_pass=True).distinct('user_id').count()}
-        return APIResponse(data,200,True)
+        
+        return APIResponse("data",200,True)
 
 
 class Profile(APIView):
     # permission_classes=[IsUser]
     def get(self,request):
-        data = User_Profile.objects.all()
+        if request.GET.get('id'):
+            data = User_Profile.objects.filter(id=request.GET.get('id'))
+        if request.GET.get('user'):
+            data = User_Profile.objects.filter(role="Customer")
         serializers = UserSerializer(data,many=True).data
         return APIResponse(serializers,200,True)
+
+    def put(self,request):
+        data = j.loads(request.body.decode('utf-8'))
+        id = data['id']
+        firstname = data['firstname']
+        lastname = data['lastname']
+        country_code = data['country_code']
+        phone_number = data['phone_number']
+        User_Profile.objects.filter(id=id).update(firstname=firstname,lastname=lastname,country_code=country_code,phone_number=phone_number)
+        return APIResponse("Profile updated successfully",200,True)
     
+class BlockAndUnblock(APIView):
+    def get(self,request):
+        id = request.GET.get('id')
+        user_obj = User_Profile.objects.filter(id=id)
+        if user_obj.latest().is_active == True:
+            user_obj.update(is_active=False)
+            return APIResponse("User unblocked successfully",200,True)
+        else:
+            user_obj.update(is_active=True)
+            return APIResponse("User blocked successfully",200,True)
 
 class Verify_otp(APIView):
     # permission_classes=[IsUser]
@@ -228,3 +255,23 @@ class Verify_otp(APIView):
         else:
             return APIResponse("Please provide valid otp",400,False)
         return APIResponse("Otp verified successfully",200,True)
+
+
+
+import razorpay
+client = razorpay.Client(auth=("rzp_test_FlBgzH672A0qLj", "MEzOs5ltbeyG37eYpGuy63AQ"))
+
+# DATA = {
+#     "amount": 100,
+#     "currency": "INR",
+#     "receipt": "receipt#1",
+#     "notes": {
+#         "key1": "value3",
+#         "key2": "value2"
+#     }
+# }
+# dd = client.order.create(data=DATA)
+# print(dd)
+
+
+# {'id': 'order_Mz2tNbA0TaGct2', 'entity': 'order', 'amount': 100, 'amount_paid': 0, 'amount_due': 100, 'currency': 'INR', 'receipt': 'receipt#1', 'offer_id': None, 'status': 'created', 'attempts': 0, 'notes': {'key1': 'value3', 'key2': 'value2'}, 'created_at': 1699679239}

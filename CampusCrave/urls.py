@@ -21,4 +21,5 @@ from apps.user.urls import *
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('',include('apps.user.urls')),
+    path('',include('apps.category.urls')),
 ]

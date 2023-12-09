@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+migrations/
 *.py[cod]
 *$py.class
 
@@ -159,9 +160,3 @@ cython_debug/
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
 
-
-CampusCrave/apps/user/migrations/
-CampusCrave/apps/user/__pycache__/
-CampusCrave/apps/category/__pycache__/
-CampusCrave/apps/category/migrations/
-CampusCrave/CampusCrave/__pycache__/

@@ -22,6 +22,8 @@ class MyAccountManager(BaseUserManager):
     def create_superuser(self, email =None, password = None, **extra_fields):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('is_verified', True)
+        extra_fields.setdefault('role', 'Admin')
         return self._create_user(email, password, **extra_fields)
 
 class User_Profile(AbstractBaseUser):
